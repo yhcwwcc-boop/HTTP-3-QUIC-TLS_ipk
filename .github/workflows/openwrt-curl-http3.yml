@@ -1,6 +1,6 @@
 name: Build OpenWrt IPK
 on:
-  workflow_dispatch:  # 保持手动触发
+  workflow_dispatch:  # 手动触发入口（必须保留）
   push:
     paths:
       - '.github/workflows/openwrt-curl-http3.yml'
@@ -9,20 +9,38 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      # -------------------- 阶段 1：核心步骤 --------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 恢复原 SDK 下载步骤（简化版）
-      - name: Download SDK
+      - name: Download & Extract OpenWrt SDK
         run: |
           SDK_URL="https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           wget $SDK_URL -O openwrt-sdk.tar.zst
-          sudo apt install -y zstd
+          sudo apt update && sudo apt install -y zstd
           tar --use-compress-program=zstd -xf openwrt-sdk.tar.zst
           SDK_DIR=$(find . -name "openwrt-sdk-*" -type d | head -n 1)
           echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
 
-      - name: Debug SDK
+      - name: Debug SDK directory
         run: |
-          echo "SDK_DIR: ${{ env.SDK_DIR }}"
-          ls ${{ env.SDK_DIR }}
+          echo "Current SDK directory: ${{ env.SDK_DIR }}"
+          ls ${{ env.SDK_DIR }}  # 调试：查看 SDK 目录结构
+
+      # -------------------- 阶段 2：Quictls 编译（带本地包） --------------------
+      - name: Link Quictls package to SDK
+        run: |
+          # 创建软链接，将本地包目录链接到 SDK 的 package 目录
+          ln -s $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls ${{ env.SDK_DIR }}/package/quictls
+          # 调试：检查链接是否成功
+          ls ${{ env.SDK_DIR }}/package/ | grep quictls
+
+      - name: Compile Quictls IPK (Debug mode)
+        run: |
+          cd ${{ env.SDK_DIR }}
+          # 强制复制本地包到 SDK 的下载目录（覆盖网络下载）
+          cp $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls/files/openssl-3.3.0-quic1.tar.gz dl/
+          # 常规编译流程
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          make package/quictls/compile V=s -j4 TERM=linux  # V=s 开启详细日志，TERM=linux 避免终端报错
