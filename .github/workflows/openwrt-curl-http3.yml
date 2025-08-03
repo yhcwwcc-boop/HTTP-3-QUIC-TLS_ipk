@@ -17,18 +17,16 @@ jobs:
 
       - name: Init package feed structure
         run: |
-          bash ./package_feed_init.sh  # 生成 quictls 等目录的 Makefile
+          bash ./package_feed_init.sh
 
-      # ↓↓↓ 替换此处为新的 SDK 下载&解压步骤 ↓↓↓
       - name: Download & Extract OpenWrt SDK (x86_64, 24.10.2)
         run: |
           SDK_URL="https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           wget $SDK_URL -O openwrt-sdk.tar.zst
-          sudo apt update && sudo apt install -y zstd  # 安装 ZSTD 工具
-          tar --use-compress-program=zstd -xf openwrt-sdk.tar.zst  # 解压 .zst
+          sudo apt update && sudo apt install -y zstd
+          tar --use-compress-program=zstd -xf openwrt-sdk.tar.zst
           SDK_DIR=$(find . -name "openwrt-sdk-*" -type d | head -n 1)
           echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
-      # ↑↑↑ 新 SDK 步骤结束 ↑↑↑
 
       - name: Link package to SDK
         run: |
@@ -39,7 +37,7 @@ jobs:
           cd ${{ env.SDK_DIR }}
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          make package/quictls/compile V=s -j4  # 编译 quictls 包
+          make package/quictls/compile V=s -j4
 
       - name: Collect generated IPK
         run: |
