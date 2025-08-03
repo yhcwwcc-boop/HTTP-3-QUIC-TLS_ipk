@@ -17,35 +17,32 @@ jobs:
 
       - name: Init package feed structure
         run: |
-          bash ./package_feed_init.sh  # 生成quictls等目录的Makefile
+          bash ./package_feed_init.sh  # 生成 quictls 等目录的 Makefile
 
-      - name: Download OpenWrt SDK (x86_64, 24.10.2)
+      # ↓↓↓ 替换此处为新的 SDK 下载&解压步骤 ↓↓↓
+      - name: Download & Extract OpenWrt SDK (x86_64, 24.10.2)
         run: |
-          # 替换为适配x86_64的SDK链接
-          SDK_URL="https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.2.0_musl.Linux-x86_64.tar.xz"
-          wget $SDK_URL -O openwrt-sdk.tar.xz
-          tar xJf openwrt-sdk.tar.xz
-          # 自动识别SDK目录（解压后目录名）
+          SDK_URL="https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          wget $SDK_URL -O openwrt-sdk.tar.zst
+          sudo apt update && sudo apt install -y zstd  # 安装 ZSTD 工具
+          tar --use-compress-program=zstd -xf openwrt-sdk.tar.zst  # 解压 .zst
           SDK_DIR=$(find . -name "openwrt-sdk-*" -type d | head -n 1)
           echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
+      # ↑↑↑ 新 SDK 步骤结束 ↑↑↑
 
       - name: Link package to SDK
         run: |
-          # 将生成的quictls目录链接到SDK的package目录
           ln -s $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls ${{ env.SDK_DIR }}/package/quictls
 
       - name: Compile IPK for x86_64
         run: |
           cd ${{ env.SDK_DIR }}
-          # 更新feeds（确保依赖正确）
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          # 编译quictls包（x86_64架构，-j4加速编译）
-          make package/quictls/compile V=s -j4
+          make package/quictls/compile V=s -j4  # 编译 quictls 包
 
       - name: Collect generated IPK
         run: |
-          # 创建输出目录，复制IPK文件
           mkdir -p $GITHUB_WORKSPACE/ipk-output
           find ${{ env.SDK_DIR }}/bin/packages -name "quictls_*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
 
@@ -54,7 +51,7 @@ jobs:
         with:
           name: quictls-ipk-x86_64
           path: ${{ github.workspace }}/ipk-output/*.ipk
-          retention-days: 30  # 保留30天，方便下载
+          retention-days: 30
 
       - name: Optional: Commit IPK to repo
         run: |
