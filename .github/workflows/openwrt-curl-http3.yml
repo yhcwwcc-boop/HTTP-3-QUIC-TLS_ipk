@@ -10,19 +10,16 @@ jobs:
   build-ipk:
     runs-on: ubuntu-latest
     steps:
-      # 步骤 1: 检出代码
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      # 步骤 2: 初始化包结构
       - name: Init package feed structure
         run: |
           bash ./package_feed_init.sh
 
-      # 步骤 3: 下载并解压 SDK
-      - name: Download & Extract OpenWrt SDK (x86_64, 24.10.2)
+      - name: Download & Extract OpenWrt SDK
         run: |
           SDK_URL="https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           wget $SDK_URL -O openwrt-sdk.tar.zst
@@ -31,35 +28,30 @@ jobs:
           SDK_DIR=$(find . -name "openwrt-sdk-*" -type d | head -n 1)
           echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
 
-      # 步骤 4: 链接包到 SDK
       - name: Link package to SDK
         run: |
           ln -s $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls ${{ env.SDK_DIR }}/package/quictls
 
-      # 步骤 5: 编译 IPK
-      - name: Compile IPK for x86_64
+      - name: Compile IPK
         run: |
           cd ${{ env.SDK_DIR }}
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           make package/quictls/compile V=s -j4
 
-      # 步骤 6: 收集生成的 IPK
-      - name: Collect generated IPK
+      - name: Collect IPK
         run: |
           mkdir -p $GITHUB_WORKSPACE/ipk-output
           find ${{ env.SDK_DIR }}/bin/packages -name "quictls_*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
 
-      # 步骤 7: 上传 Artifact
-      - name: Upload IPK as Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
           name: quictls-ipk-x86_64
           path: ${{ github.workspace }}/ipk-output/*.ipk
           retention-days: 30
 
-      # 步骤 8: 提交 IPK 到仓库（可选）
-      - name: Optional: Commit IPK to repo
+      - name: Commit IPK (Optional)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
