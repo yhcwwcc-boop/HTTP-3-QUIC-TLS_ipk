@@ -32,12 +32,19 @@ jobs:
         run: |
           ln -s $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls ${{ env.SDK_DIR }}/package/quictls
 
+      - name: Prepare default config (关键修复)
+        run: |
+          cd ${{ env.SDK_DIR }}
+          # 生成默认配置，避免交互式 menuconfig
+          make defconfig
+
       - name: Compile IPK
         run: |
           cd ${{ env.SDK_DIR }}
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          make package/quictls/compile V=s -j4
+          # 强制非交互式编译，增加-j4并行编译
+          make package/quictls/compile V=s -j4 TERM=linux
 
       - name: Collect IPK
         run: |
@@ -45,7 +52,7 @@ jobs:
           find ${{ env.SDK_DIR }}/bin/packages -name "quictls_*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
 
       - name: Upload IPK as Artifact
-        uses: actions/upload-artifact@v4  # 已升级到最新版，解决弃用报错
+        uses: actions/upload-artifact@v4
         with:
           name: quictls-ipk-x86_64
           path: ${{ github.workspace }}/ipk-output/*.ipk
