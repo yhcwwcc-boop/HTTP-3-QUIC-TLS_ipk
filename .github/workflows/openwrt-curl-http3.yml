@@ -44,8 +44,8 @@ jobs:
           mkdir -p $GITHUB_WORKSPACE/ipk-output
           find ${{ env.SDK_DIR }}/bin/packages -name "quictls_*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+      - name: Upload IPK as Artifact
+        uses: actions/upload-artifact@v4  # 已升级到最新版，解决弃用报错
         with:
           name: quictls-ipk-x86_64
           path: ${{ github.workspace }}/ipk-output/*.ipk
