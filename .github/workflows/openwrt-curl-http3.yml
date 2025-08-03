@@ -1,23 +1,17 @@
-name: Build OpenWrt x86_64 QUIC/TLS IPK
-
+name: Build OpenWrt IPK
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 手动触发入口（必须保留）
   push:
     paths:
       - '.github/workflows/openwrt-curl-http3.yml'
 
 jobs:
-  build-ipk:
+  build:
     runs-on: ubuntu-latest
     steps:
+      # -------------------- 阶段 1：核心步骤 --------------------
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Init package feed structure
-        run: |
-          bash ./package_feed_init.sh
 
       - name: Download & Extract OpenWrt SDK
         run: |
@@ -28,40 +22,25 @@ jobs:
           SDK_DIR=$(find . -name "openwrt-sdk-*" -type d | head -n 1)
           echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
 
-      - name: Link package to SDK
+      - name: Debug SDK directory
         run: |
+          echo "Current SDK directory: ${{ env.SDK_DIR }}"
+          ls ${{ env.SDK_DIR }}  # 调试：查看 SDK 目录结构
+
+      # -------------------- 阶段 2：Quictls 编译（带本地包） --------------------
+      - name: Link Quictls package to SDK
+        run: |
+          # 创建软链接，将本地包目录链接到 SDK 的 package 目录
           ln -s $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls ${{ env.SDK_DIR }}/package/quictls
+          # 调试：检查链接是否成功
+          ls ${{ env.SDK_DIR }}/package/ | grep quictls
 
-      - name: Prepare default config (关键修复)
+      - name: Compile Quictls IPK (Debug mode)
         run: |
           cd ${{ env.SDK_DIR }}
-          # 生成默认配置，避免交互式 menuconfig
-          make defconfig
-
-      - name: Compile IPK
-        run: |
-          cd ${{ env.SDK_DIR }}
+          # 强制复制本地包到 SDK 的下载目录（覆盖网络下载）
+          cp $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls/files/openssl-3.3.0-quic1.tar.gz dl/
+          # 常规编译流程
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          # 强制非交互式编译，增加-j4并行编译
-          make package/quictls/compile V=s -j4 TERM=linux
-
-      - name: Collect IPK
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/ipk-output
-          find ${{ env.SDK_DIR }}/bin/packages -name "quictls_*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
-
-      - name: Upload IPK as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: quictls-ipk-x86_64
-          path: ${{ github.workspace }}/ipk-output/*.ipk
-          retention-days: 30
-
-      - name: Commit IPK (Optional)
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add ipk-output/
-          git commit -m "Auto-generate quictls IPK (x86_64)" || echo "No new IPK"
-          git push https://${{ secrets.HTTP_3_QUIC_TLS_ipk }}@github.com/yhcwwcc-boop/HTTP-3-QUIC-TLS_ipk.git main
+          make package/quictls/compile V=s -j4 TERM=linux  # V=s 开启详细日志，TERM=linux 避免终端报错
