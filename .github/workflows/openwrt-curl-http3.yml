@@ -1,4 +1,4 @@
-name: Init OpenWrt HTTP3/QUIC/TLS Package Feed
+name: Build OpenWrt x86_64 QUIC/TLS IPK
 
 on:
   workflow_dispatch:
@@ -7,29 +7,59 @@ on:
       - '.github/workflows/openwrt-curl-http3.yml'
 
 jobs:
-  setup-feed:
+  build-ipk:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: false  # 关键：禁用默认凭据，避免冲突
+          persist-credentials: false
 
-      - name: Init package feed structure for OpenWrt curl+HTTP3
+      - name: Init package feed structure
         run: |
-          bash ./package_feed_init.sh
+          bash ./package_feed_init.sh  # 生成quictls等目录的Makefile
 
-      - name: Commit & push generated feed
+      - name: Download OpenWrt SDK (x86_64, 24.10.2)
         run: |
-          # 配置用户信息
+          # 替换为适配x86_64的SDK链接
+          SDK_URL="https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.2.0_musl.Linux-x86_64.tar.xz"
+          wget $SDK_URL -O openwrt-sdk.tar.xz
+          tar xJf openwrt-sdk.tar.xz
+          # 自动识别SDK目录（解压后目录名）
+          SDK_DIR=$(find . -name "openwrt-sdk-*" -type d | head -n 1)
+          echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
+
+      - name: Link package to SDK
+        run: |
+          # 将生成的quictls目录链接到SDK的package目录
+          ln -s $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls ${{ env.SDK_DIR }}/package/quictls
+
+      - name: Compile IPK for x86_64
+        run: |
+          cd ${{ env.SDK_DIR }}
+          # 更新feeds（确保依赖正确）
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          # 编译quictls包（x86_64架构，-j4加速编译）
+          make package/quictls/compile V=s -j4
+
+      - name: Collect generated IPK
+        run: |
+          # 创建输出目录，复制IPK文件
+          mkdir -p $GITHUB_WORKSPACE/ipk-output
+          find ${{ env.SDK_DIR }}/bin/packages -name "quictls_*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
+
+      - name: Upload IPK as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: quictls-ipk-x86_64
+          path: ${{ github.workspace }}/ipk-output/*.ipk
+          retention-days: 30  # 保留30天，方便下载
+
+      - name: Optional: Commit IPK to repo
+        run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # 添加生成的文件
-          git add openwrt-curl-http3-feed/
-          
-          # 提交（无变更则跳过）
-          git commit -m "Auto-generate package feed" || echo "No changes to commit"
-          
-          # 强制使用你的密钥推送（确保仓库地址和密钥名称正确）
+          git add ipk-output/
+          git commit -m "Auto-generate quictls IPK (x86_64)" || echo "No new IPK"
           git push https://${{ secrets.HTTP_3_QUIC_TLS_ipk }}@github.com/yhcwwcc-boop/HTTP-3-QUIC-TLS_ipk.git main
