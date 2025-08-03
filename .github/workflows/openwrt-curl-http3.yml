@@ -1,10 +1,10 @@
 name: Init OpenWrt HTTP3/QUIC/TLS Package Feed
 
 on:
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
   push:
     paths:
-      - '.github/workflows/openwrt-curl-http3.yml'  # 仅当工作流文件修改时自动触发
+      - '.github/workflows/openwrt-curl-http3.yml'
 
 jobs:
   setup-feed:
@@ -12,22 +12,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false  # 关键：禁用默认凭据，避免冲突
 
       - name: Init package feed structure for OpenWrt curl+HTTP3
         run: |
-          bash ./package_feed_init.sh  # 执行初始化脚本
+          bash ./package_feed_init.sh
 
       - name: Commit & push generated feed
         run: |
-          # 配置提交用户信息（固定为GitHub Actions机器人）
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 配置用户信息
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 添加生成的目录到暂存区
-          git add openwrt-curl-http3-feed
+          # 添加生成的文件
+          git add openwrt-curl-http3-feed/
           
-          # 提交变更（如果有新内容）
-          git commit -m "Auto: Generate OpenWrt curl/HTTP3/quictls/ngtcp2/nghttp3 package feed" || echo "Nothing to commit"
+          # 提交（无变更则跳过）
+          git commit -m "Auto-generate package feed" || echo "No changes to commit"
           
-          # 使用自定义密钥推送（核心修改：替换为你的密钥名和仓库地址）
+          # 强制使用你的密钥推送（确保仓库地址和密钥名称正确）
           git push https://${{ secrets.HTTP_3_QUIC_TLS_ipk }}@github.com/yhcwwcc-boop/HTTP-3-QUIC-TLS_ipk.git main
