@@ -1,67 +1,18 @@
-name: Build OpenWrt x86_64 QUIC/TLS IPK
-
+name: Build OpenWrt IPK
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 必须保留，否则无手动触发按钮
   push:
     paths:
       - '.github/workflows/openwrt-curl-http3.yml'
 
 jobs:
-  build-ipk:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
-      - name: Init package feed structure
+      - name: Debug
         run: |
-          bash ./package_feed_init.sh
-
-      - name: Download & Extract OpenWrt SDK
-        run: |
-          SDK_URL="https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
-          wget $SDK_URL -O openwrt-sdk.tar.zst
-          sudo apt update && sudo apt install -y zstd
-          tar --use-compress-program=zstd -xf openwrt-sdk.tar.zst
-          SDK_DIR=$(find . -name "openwrt-sdk-*" -type d | head -n 1)
-          echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
-
-      - name: Link package to SDK
-        run: |
-          ln -s $GITHUB_WORKSPACE/openwrt-curl-http3-feed/quictls ${{ env.SDK_DIR }}/package/quictls
-
-      - name: Prepare default config (关键修复)
-        run: |
-          cd ${{ env.SDK_DIR }}
-          # 生成默认配置，避免交互式 menuconfig
-          make defconfig
-
-      - name: Compile IPK
-        run: |
-          cd ${{ env.SDK_DIR }}
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-          # 强制非交互式编译，增加-j4并行编译
-          make package/quictls/compile V=s -j4 TERM=linux
-
-      - name: Collect IPK
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/ipk-output
-          find ${{ env.SDK_DIR }}/bin/packages -name "quictls_*.ipk" -exec cp {} $GITHUB_WORKSPACE/ipk-output/ \;
-
-      - name: Upload IPK as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: quictls-ipk-x86_64
-          path: ${{ github.workspace }}/ipk-output/*.ipk
-          retention-days: 30
-
-      - name: Commit IPK (Optional)
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add ipk-output/
-          git commit -m "Auto-generate quictls IPK (x86_64)" || echo "No new IPK"
-          git push https://${{ secrets.HTTP_3_QUIC_TLS_ipk }}@github.com/yhcwwcc-boop/HTTP-3-QUIC-TLS_ipk.git main
+          echo "Workflow triggered successfully!"
+          ls -l
